@@ -10,6 +10,52 @@ db = SessionLocal()
 # 환경변수 key값 가져오기
 key = os.getenv('KEY')
 
+# area테이블 status 추가
+def add_status():
+    area_url = f"http://openapi.seoul.go.kr:8088/{key}/xml/VwsmTrdarIxQq/1/5/2021"
+
+    content = requests.get(area_url).content
+    dict = xmltodict.parse(content)
+    jsonString = json.dumps(dict['VwsmTrdarIxQq'], ensure_ascii=False)
+    jsonObj = json.loads(jsonString)
+
+    # 상권변화지표 데이터 총 개수
+    total_cnt = int(jsonObj['list_total_count'])
+
+    print("노원구 상권변화지표의 데이터를 찾고있습니다...")
+    for i in range(1, math.ceil(total_cnt/1000)+1):
+        end = i * 1000
+        start = end - 1000 + 1
+        if end > total_cnt:
+            end = total_cnt
+
+    # openapi
+        change_url = f"http://openapi.seoul.go.kr:8088/{key}/xml/VwsmTrdarIxQq/{start}/{end}/2021"
+
+        content = requests.get(change_url).content
+        dict = xmltodict.parse(content)
+        jsonString = json.dumps(dict['VwsmTrdarStorQq'], ensure_ascii=False)
+        jsonObj = json.loads(jsonString)
+
+        for u in jsonObj['row']:
+            if int(u['TRDAR_CD']) in area_codes:
+                if u['TRDAR_CHNGE_IX'] == 'HH':
+                    status_code = 1  # 정체
+                elif u['TRDAR_CHNGE_IX'] == 'HL':
+                    status_code = 2  # 상권축소
+                elif u['TRDAR_CHNGE_IX'] == 'LH':
+                    status_code = 3  # 상권확장
+                elif u['TRDAR_CHNGE_IX'] == 'LL':
+                    status_code = 1  # 다이나믹
+                
+                db_status = models.Area(status=status_code)  # 업종 폐업률
+                db.add(db_status)
+
+    db.commit()
+    print("데이터 저장 완료!")
+
+
+
 # 노원구 상권영역 db저장
 # rValue값 구하기?
 def create_area():
@@ -22,6 +68,12 @@ def create_area():
 
     # 상권영역 데이터 총 개수
     total_cnt = int(jsonObj['list_total_count'])
+
+    # 노원구 상권코드 리스트
+    area_code_db = db.query(Area.areaCode)
+    area_codes = []
+    for area_code in area_code_db:
+        area_codes.append(area_code[0])
 
     print("노원구 상권영역의 데이터를 찾고있습니다...")
     for i in range(1, math.ceil(total_cnt/1000)+1):
@@ -49,6 +101,8 @@ def create_area():
                 db.add(db_area)
 
     db.commit()
+
+
     print("데이터 저장 완료!")
         
 
@@ -230,8 +284,9 @@ def create_store():
     pass
 
 
-# if __name__ == '__main__':
+if __name__ == '__main__':
     # create_area()
     # create_business()
     # create_change()
     # create_sales()
+    add_status()
