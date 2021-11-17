@@ -12,9 +12,9 @@ key = os.getenv('KEY')
 
 # area테이블 status 추가
 def add_status():
-    area_url = f"http://openapi.seoul.go.kr:8088/{key}/xml/VwsmTrdarIxQq/1/5/2021"
+    status_url = f"http://openapi.seoul.go.kr:8088/{key}/xml/VwsmTrdarIxQq/1/5/2021"
 
-    content = requests.get(area_url).content
+    content = requests.get(status_url).content
     dict = xmltodict.parse(content)
     jsonString = json.dumps(dict['VwsmTrdarIxQq'], ensure_ascii=False)
     jsonObj = json.loads(jsonString)
@@ -22,19 +22,26 @@ def add_status():
     # 상권변화지표 데이터 총 개수
     total_cnt = int(jsonObj['list_total_count'])
 
+    # 노원구 상권코드 리스트
+    area_code_db = db.query(Area.areaCode)
+    area_codes = []
+    for area_code in area_code_db:
+        area_codes.append(area_code[0])
+
     print("노원구 상권변화지표의 데이터를 찾고있습니다...")
+    area_status = {}
     for i in range(1, math.ceil(total_cnt/1000)+1):
         end = i * 1000
         start = end - 1000 + 1
         if end > total_cnt:
             end = total_cnt
 
-    # openapi
-        change_url = f"http://openapi.seoul.go.kr:8088/{key}/xml/VwsmTrdarIxQq/{start}/{end}/2021"
+        # openapi
+        status_url = f"http://openapi.seoul.go.kr:8088/{key}/xml/VwsmTrdarIxQq/{start}/{end}/2021"
 
-        content = requests.get(change_url).content
+        content = requests.get(status_url).content
         dict = xmltodict.parse(content)
-        jsonString = json.dumps(dict['VwsmTrdarStorQq'], ensure_ascii=False)
+        jsonString = json.dumps(dict['VwsmTrdarIxQq'], ensure_ascii=False)
         jsonObj = json.loads(jsonString)
 
         for u in jsonObj['row']:
@@ -46,18 +53,32 @@ def add_status():
                 elif u['TRDAR_CHNGE_IX'] == 'LH':
                     status_code = 3  # 상권확장
                 elif u['TRDAR_CHNGE_IX'] == 'LL':
-                    status_code = 1  # 다이나믹
-                
-                db_status = models.Area(status=status_code)  # 업종 폐업률
-                db.add(db_status)
+                    status_code = 1  # 다이나믹                
+                # area_status[u['TRDAR_CD']] = status_code
+                area = db.query(Area).filter(Area.areaCode == int(u['TRDAR_CD'])).first()
+                area.status = status_code
+                db.commit()
 
-    db.commit()
+    # print(area_status)
+    # for area_code, status_code in area_status.items():
+    #     area = db.query(Area).filter(Area.areaCode == int(area_code))
+    #     print(area.)
+
+    # for area in 
+    # print(area_status[:18])
+    # print(area_codes)
+
+
+                
+    #             db_status = models.Area(status=status_code)  # 업종 폐업률
+    #             db.update(db_status)
+
+    # db.commit()
     print("데이터 저장 완료!")
 
 
 
 # 노원구 상권영역 db저장
-# rValue값 구하기?
 def create_area():
     area_url = f"http://openapi.seoul.go.kr:8088/{key}/xml/TbgisTrdarRelm/1/5/"
 
